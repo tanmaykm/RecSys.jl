@@ -41,3 +41,13 @@ type SparseMat <: FileSpec
     S::Union{RatingMatrix, SharedRatingMatrix}
 end
 read_input(fspec::SparseMat) = fspec.S
+
+type SparseMatChunks <: FileSpec
+    metafile::AbstractString
+    max_cache::Int
+
+    function SparseMatChunks(metafile::AbstractString, max_cache::Int=5)
+        new(metafile, max_cache)
+    end
+end
+read_input(fspec::SparseMatChunks) = ChunkedFile(fspec.metafile, UnitRange{Int64}, SparseMatrixCSC{Float64,Int}, fspec.max_cache)

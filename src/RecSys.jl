@@ -36,16 +36,18 @@ macro threads(x)
 end
 end
 
-include("input.jl")
-include("als_model.jl")
-include("als-wr.jl")
-include("utils.jl")
-
 # enable logging only during debugging
 #using Logging
 ##const logger = Logging.configure(filename="recsys.log", level=DEBUG)
 #const logger = Logging.configure(level=DEBUG)
 #logmsg(s) = debug(s)
 logmsg(s) = nothing
+
+include("chunk.jl")
+include("input.jl")
+include("dist_input.jl")
+include("als_model.jl")
+include("als-wr.jl")
+include("utils.jl")
 
 end
