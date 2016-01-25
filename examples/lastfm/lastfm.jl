@@ -17,6 +17,9 @@ type MusicRec
         T, N = map_artists(trainingset, artist_names, artist_map)
         new(trainingset, artist_names, artist_map, ALSWR(SparseMat(T)), Nullable(N))
     end
+    function MusicRec(user_item_ratings::FileSpec, item_user_ratings::FileSpec, artist_names::FileSpec, artist_map::FileSpec)
+        new(user_item_ratings, artist_names, artist_map, ALSWR(user_item_ratings, item_user_ratings, ParChunk()), nothing)
+    end
 end
 
 function read_artist_map(artist_map::FileSpec)
@@ -144,4 +147,17 @@ function test(dataset_path)
     localize!(rec.als)
     save(rec, "model.sav")
     nothing
+end
+
+function test_chunks(dataset_path)
+    user_item_ratings = SparseMatChunks(joinpath(dataset_path, "splits", "R_itemwise.meta"), 10)
+    item_user_ratings = SparseMatChunks(joinpath(dataset_path, "splits", "RT_userwise.meta"), 10)
+    artist_names = DlmFile(joinpath(dataset_path, "artist_data.txt"); dlm='\t', quotes=false)
+    artist_map = DlmFile(joinpath(dataset_path, "artist_alias.txt"))
+
+    rec = MusicRec(user_item_ratings, item_user_ratings, artist_names, artist_map)
+    train(rec, 20, 20)
+
+    err = rmse(rec)
+    println("rmse of the model: $err")
 end

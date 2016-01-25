@@ -1,5 +1,4 @@
 using RecSys
-include("/home/tan/Work/julia/packages/RecSys/src/chunk.jl")
 
 function split_sparse(S, chunkmax, filepfx)
     metafilename = "$(filepfx).meta"
@@ -10,7 +9,6 @@ function split_sparse(S, chunkmax, filepfx)
         splits = UnitRange[]
         nzval = S.nzval
         rowval = S.rowval
-        println("max cols: $(size(S,2))")
         for col in 1:size(S,2)
             npos = S.colptr[col+1]
             if (npos >= (count + chunkmax)) || (col == size(S,2))
@@ -53,11 +51,11 @@ function splitall(inp::DlmFile, output_path::AbstractString, nsplits::Int)
     items   = convert(Vector{Int64},   ratings[:,2]);
     ratings = convert(Vector{Float64}, ratings[:,3]);
     R = sparse(users, items, ratings);
-    R, item_idmap, user_idmap = RecSys.filter_empty(R)
-    isempty(item_idmap) || println("item ids were re-mapped")
-    isempty(user_idmap) || println("user ids were re-mapped")
+    splitall(R, output_path, nsplits)
+end
 
-    nratings = length(ratings)
+function splitall(R::SparseMatrixCSC, output_path::AbstractString, nsplits::Int)
+    nratings = nnz(R)
     nsplits_u = round(Int, nratings/nsplits)
     nsplits_i = round(Int, nratings/nsplits)
 
@@ -75,8 +73,46 @@ function split_movielens(dataset_path = "/data/Work/datasets/movielens/ml-20m")
 end
 
 function split_lastfm(dataset_path = "/data/Work/datasets/last_fm_music_recommendation/profiledata_06-May-2005")
-    ratings_file = DlmFile(joinpath(dataset_path, "user_artist_data.txt"))
-    splitall(ratings_file, joinpath(dataset_path, "splits"), 20)
+
+    function read_artist_map(artist_map::FileSpec)
+        t1 = time()
+        RecSys.logmsg("reading artist map")
+        A = read_input(artist_map)
+        valid = map(x->isa(x, Integer), A)
+        valid = valid[:,1] & valid[:,2]
+        Avalid = convert(Matrix{Int64}, A[valid, :])
+
+        amap = Dict{Int64,Int64}()
+        for idx in 1:size(Avalid,1)
+            bad_id = Avalid[idx, 1]
+            good_id = Avalid[idx, 2]
+            amap[bad_id] = good_id
+        end
+        RecSys.logmsg("read artist map in $(time()-t1) secs")
+        amap
+    end
+
+    function read_trainingset(trainingset::FileSpec, amap::Dict{Int64,Int64})
+        t1 = time()
+        RecSys.logmsg("reading trainingset")
+        T = read_input(trainingset)
+        for idx in 1:size(T,1)
+            artist_id = T[idx,2]
+            if artist_id in keys(amap)
+                T[idx,2] = amap[artist_id]
+            end
+        end
+        users   = convert(Vector{Int64},   T[:,1])
+        artists = convert(Vector{Int64},   T[:,2])
+        ratings = convert(Vector{Float64}, T[:,3])
+        S = sparse(users, artists, ratings)
+        RecSys.logmsg("read trainingset in $(time()-t1) secs")
+        S
+    end
+
+    amap = read_artist_map(DlmFile(joinpath(dataset_path, "artist_alias.txt")))
+    T = read_trainingset(DlmFile(joinpath(dataset_path, "user_artist_data.txt")), amap)
+    splitall(T, joinpath(dataset_path, "splits"), 20)
 end
 
 function load_splits(dataset_path = "/data/Work/datasets/last_fm_music_recommendation/profiledata_06-May-2005/splits")
@@ -129,6 +165,5 @@ function create_memmapped_splits(dataset_path = "/data/Work/datasets/last_fm_mus
     end
 end
 
-split_movielens()
 #load_splits()
 #create_memmapped_splits()
