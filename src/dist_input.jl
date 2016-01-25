@@ -55,19 +55,19 @@ all_item_ratings(inp::DistInputs, u::Int64) = _spvals(get(inp.RT), u)
 all_items_rated(inp::DistInputs, u::Int64) = _sprows(get(inp.RT), u)
 
 function _sprowsvals{K,SK,SV}(cf::ChunkedFile{K,SparseMatrixCSC{SK,SV}}, col::Int64)
-    chunk = getchunk(cf, key)
+    chunk = getchunk(cf, col)
     d = data(chunk, cf.lrucache)
-    _sprowsvals(d, key - first(chunk.keyrange) + 1)
+    _sprowsvals(d, col - first(chunk.keyrange) + 1)
 end
 
 function _sprows{K,SK,SV}(cf::ChunkedFile{K,SparseMatrixCSC{SK,SV}}, col::Int64)
-    chunk = getchunk(cf, key)
+    chunk = getchunk(cf, col)
     d = data(chunk, cf.lrucache)
-    _sprows(d, key - first(chunk.keyrange) + 1)
+    _sprows(d, col - first(chunk.keyrange) + 1)
 end
 
 function _spvals{K,SK,SV}(cf::ChunkedFile{K,SparseMatrixCSC{SK,SV}}, col::Int64)
-    chunk = getchunk(cf, key)
+    chunk = getchunk(cf, col)
     d = data(chunk, cf.lrucache)
-    _spvals(d, key - first(chunk.keyrange) + 1)
+    _spvals(d, col - first(chunk.keyrange) + 1)
 end

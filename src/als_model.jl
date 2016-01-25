@@ -50,7 +50,7 @@ end
 vec_mul_p(model::SharedMemoryModel, v) = v * model.P
 vec_mul_pinv(model::SharedMemoryModel, v) = v * pinv(model)
 
-function prep{TI<:SharedMemoryInputs}(inp::TI, nfacts::Int, lambda::Float64)
+function prep{TI<:Inputs}(inp::TI, nfacts::Int, lambda::Float64)
     ensure_loaded(inp)
     t1 = time()
     logmsg("preparing inputs...")

@@ -10,14 +10,15 @@ function split_sparse(S, chunkmax, filepfx)
         splits = UnitRange[]
         nzval = S.nzval
         rowval = S.rowval
+        println("max cols: $(size(S,2))")
         for col in 1:size(S,2)
             npos = S.colptr[col+1]
-            if npos >= (count + chunkmax)
+            if (npos >= (count + chunkmax)) || (col == size(S,2))
                 print("\tchunk $chunknum ... ")
                 cfilename = "$(filepfx).$(chunknum)"
-                println(mfile, colstart, ",", col-1, ",", cfilename)
+                println(mfile, colstart, ",", col, ",", cfilename)
                 open(cfilename, "w") do cfile
-                    for cidx in colstart:(col-1)
+                    for cidx in colstart:col
                         rowstart = S.colptr[cidx]
                         rowend = S.colptr[cidx+1]-1
                         for ridx in rowstart:rowend
@@ -32,8 +33,8 @@ function split_sparse(S, chunkmax, filepfx)
                 #        println(cfile, R[idx], ",", C[idx], ",", NZ[idx])
                 #    end
                 #end
-                push!(splits, colstart:(col-1))
-                colstart = col
+                push!(splits, colstart:col)
+                colstart = col+1
                 count = npos
                 chunknum += 1
                 println("done")
@@ -52,6 +53,10 @@ function splitall(inp::DlmFile, output_path::AbstractString, nsplits::Int)
     items   = convert(Vector{Int64},   ratings[:,2]);
     ratings = convert(Vector{Float64}, ratings[:,3]);
     R = sparse(users, items, ratings);
+    R, item_idmap, user_idmap = RecSys.filter_empty(R)
+    isempty(item_idmap) || println("item ids were re-mapped")
+    isempty(user_idmap) || println("user ids were re-mapped")
+
     nratings = length(ratings)
     nsplits_u = round(Int, nratings/nsplits)
     nsplits_i = round(Int, nratings/nsplits)
@@ -124,5 +129,6 @@ function create_memmapped_splits(dataset_path = "/data/Work/datasets/last_fm_mus
     end
 end
 
+split_movielens()
 #load_splits()
-create_memmapped_splits()
+#create_memmapped_splits()

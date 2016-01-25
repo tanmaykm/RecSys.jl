@@ -4,7 +4,8 @@ type ALSWR{TP<:Parallelism,TI<:Inputs,TM<:Model}
     par::TP
 end
 
-ALSWR{TP<:Parallelism}(inp::FileSpec, par::TP=ParShmem()) = ALSWR{TP,SharedMemoryInputs,SharedMemoryModel}(SharedMemoryInputs(inp), nothing, par)
+ALSWR{TP<:Union{ParThread,ParShmem}}(inp::FileSpec, par::TP=ParShmem()) = ALSWR{TP,SharedMemoryInputs,SharedMemoryModel}(SharedMemoryInputs(inp), nothing, par)
+ALSWR(user_item_ratings::FileSpec, item_user_ratings::FileSpec, par::ParChunk) = ALSWR{ParChunk,DistInputs,SharedMemoryModel}(DistInputs(user_item_ratings, item_user_ratings), nothing, par)
 
 function clear(als::ALSWR)
     clear(als.inp)
@@ -153,12 +154,19 @@ end
 
 const compdata = ComputeData[]
 
-share_compdata(c::ComputeData) = (push!(compdata, c); nothing)
+function share_compdata(c::ComputeData)
+    push!(compdata, c)
+    ensure_loaded(c.inp)
+    nothing
+end
 fetch_compdata() = compdata[1]
 noop(args...) = nothing
 
-function fact_iters{TP<:ParShmem,TM<:Model,TI<:Inputs}(::TP, model::TM, inp::TI, niters::Int64)
+function fact_iters{TP<:Union{ParShmem,ParChunk},TM<:Model,TI<:Inputs}(::TP, model::TM, inp::TI, niters::Int64)
     t1 = time()
+
+    (TP <: ParChunk) && clear(inp)
+
     share!(model)
     share!(inp)
 
@@ -169,6 +177,7 @@ function fact_iters{TP<:ParShmem,TM<:Model,TI<:Inputs}(::TP, model::TM, inp::TI,
 
     nu = nusers(inp)
     ni = nitems(inp)
+    logmsg("nusers: $nu, nitems: $ni")
     for iter in 1:niters
         logmsg("begin iteration $iter")
         pmap(update_user, 1:nu)
@@ -190,7 +199,7 @@ function fact_iters{TP<:ParShmem,TM<:Model,TI<:Inputs}(::TP, model::TM, inp::TI,
     nothing
 end
 
-function rmse{TP<:ParShmem,TI<:Inputs}(als::ALSWR{TP}, inp::TI)
+function rmse{TP<:Union{ParShmem,ParChunk},TI<:Inputs}(als::ALSWR{TP}, inp::TI)
     t1 = time()
 
     model = get(als.model)
