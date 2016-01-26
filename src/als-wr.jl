@@ -177,25 +177,25 @@ function fact_iters{TP<:Union{ParShmem,ParChunk},TM<:Model,TI<:Inputs}(::TP, mod
 
     nu = nusers(inp)
     ni = nitems(inp)
-    logmsg("nusers: $nu, nitems: $ni")
+    @logmsg("nusers: $nu, nitems: $ni")
     for iter in 1:niters
-        logmsg("begin iteration $iter")
+        @logmsg("begin iteration $iter")
         pmap(update_user, 1:nu)
         #@parallel (noop) for u in 1:nu
         #    update_user(u)
         #end
-        logmsg("\tusers")
+        @logmsg("\tusers")
         pmap(update_item, 1:ni)
         #@parallel (noop) for i in 1:ni
         #    update_item(i)
         #end
-        logmsg("\titems")
+        @logmsg("\titems")
     end
 
     localize!(model)
 
     t2 = time()
-    logmsg("fact time $(t2-t1)")
+    @logmsg("fact time $(t2-t1)")
     nothing
 end
 
@@ -213,7 +213,7 @@ function rmse{TP<:Union{ParShmem,ParChunk},TI<:Inputs}(als::ALSWR{TP}, inp::TI)
         [sum((predicted .- nzvals) .^ 2), length(predicted)]
     end
     localize!(model)
-    logmsg("rmse time $(time()-t1)")
+    @logmsg("rmse time $(time()-t1)")
     sqrt(cumerr[1]/cumerr[2])
 end
 
@@ -242,22 +242,22 @@ function fact_iters{TP<:ParThread,TM<:Model,TI<:Inputs}(::TP, model::TM, inp::TI
     ni = nitems(inp)
     lambdaI = get(model.lambdaI)
     for iter in 1:niters
-        logmsg("begin iteration $iter")
+        @logmsg("begin iteration $iter")
         # gc is not threadsafe yet. issue #10317
         gc_enable(false)
         thread_update_user(model, inp, nu, lambdaI)
         gc_enable(true)
         gc()
         gc_enable(false)
-        logmsg("\tusers")
+        @logmsg("\tusers")
         thread_update_item(model, inp, ni, lambdaI)
         gc_enable(true)
         gc()
-        logmsg("\titems")
+        @logmsg("\titems")
     end
 
     t2 = time()
-    logmsg("fact time $(t2-t1)")
+    @logmsg("fact time $(t2-t1)")
     nothing
 end
 
@@ -287,7 +287,7 @@ function rmse{TP<:ParThread,TI<:Inputs}(als::ALSWR{TP}, inp::TI)
         gc()
         pos = endpos + 1
     end
-    logmsg("rmse time $(time()-t1)")
+    @logmsg("rmse time $(time()-t1)")
     sqrt(sum(errs)/sum(lengths))
 end
 end

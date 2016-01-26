@@ -34,7 +34,7 @@ function Chunk(path::AbstractString, keyrange, V)
 end
 
 function load{T,N}(::Type{MemMappedMatrix{T,N}}, chunk::Chunk)
-    logmsg("loading memory mapping chunk $(chunk.path)")
+    @logmsg("loading memory mapping chunk $(chunk.path)")
     ncells = div(chunk.size, sizeof(T))
     M = Int(ncells/N)
     A = Mmap.mmap(chunk.path, Matrix{T}, (M,N), chunk.offset)
@@ -42,7 +42,7 @@ function load{T,N}(::Type{MemMappedMatrix{T,N}}, chunk::Chunk)
 end
 
 function load{T<:Vector{UInt8}}(::Type{T}, chunk::Chunk)
-    logmsg("loading chunk $(chunk.path)")
+    @logmsg("loading chunk $(chunk.path)")
     open(chunk.path) do f
         seek(f, chunk.offset)
         databytes = Array(UInt8, chunk.size)
@@ -79,7 +79,7 @@ function data{K,V}(chunk::Chunk{K,V}, lrucache::LRU)
 end
 
 function finalize_chunk_data(chunk::Chunk, data)
-    #logmsg("unloading chunk $(chunk.path)")
+    #@logmsg("unloading chunk $(chunk.path)")
     chunk.data = nothing
 end
 

@@ -53,7 +53,7 @@ vec_mul_pinv(model::SharedMemoryModel, v) = v * pinv(model)
 function prep{TI<:Inputs}(inp::TI, nfacts::Int, lambda::Float64)
     ensure_loaded(inp)
     t1 = time()
-    logmsg("preparing inputs...")
+    @logmsg("preparing inputs...")
 
     nu = nusers(inp)
     ni = nitems(inp)
@@ -68,7 +68,7 @@ function prep{TI<:Inputs}(inp::TI, nfacts::Int, lambda::Float64)
     model = SharedMemoryModel(U, P, nfacts, lambda, lambdaI, nothing)
 
     t2 = time()
-    logmsg("prep time: $(t2-t1)")
+    @logmsg("prep time: $(t2-t1)")
     model
 end
 

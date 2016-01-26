@@ -33,6 +33,7 @@ using Base.Threads
 type ParThread <: Parallelism end
 export ParThread
 else
+threadid() = 1
 macro threads(x)
 end
 end
@@ -41,8 +42,14 @@ end
 #using Logging
 ##const logger = Logging.configure(filename="recsys.log", level=DEBUG)
 #const logger = Logging.configure(level=DEBUG)
-#logmsg(s) = debug(s)
-logmsg(s) = nothing
+#macro logmsg(s)
+#    quote
+#        debug("[", myid(), "-", threadid(), "] ", $(esc(s)))
+#    end
+#end
+macro logmsg(s)
+end
+
 
 include("chunk.jl")
 include("input.jl")
