@@ -34,7 +34,7 @@ function Chunk(path::AbstractString, keyrange, V)
 end
 
 function load{T,N}(::Type{MemMappedMatrix{T,N}}, chunk::Chunk)
-    @logmsg("loading memory mapping chunk $(chunk.path)")
+    @logmsg("loading memory mapped chunk $(chunk.path)")
     ncells = div(chunk.size, sizeof(T))
     M = Int(ncells/N)
     A = Mmap.mmap(chunk.path, Matrix{T}, (M,N), chunk.offset)
@@ -56,6 +56,7 @@ function load{T<:Matrix}(::Type{T}, chunk::Chunk)
     M::T
 end
 
+#=
 function load{T<:SparseMatrixCSC}(::Type{T}, chunk::Chunk)
     A = load(Matrix{Float64}, chunk)
     rows = convert(Vector{Int64},   A[:,1]);
@@ -65,6 +66,14 @@ function load{T<:SparseMatrixCSC}(::Type{T}, chunk::Chunk)
     # subtract keyrange to keep sparse matrix small
     cols .-= (first(chunk.keyrange) - 1)
     sparse(rows, cols, vals)::T
+end
+=#
+function load{T<:SparseMatrixCSC}(::Type{T}, chunk::Chunk)
+    @logmsg("loading memory mapped sparse $(chunk.path)")
+    open(chunk.path) do f
+        seek(f, chunk.offset)
+        return mmapload(f)::T
+    end
 end
 
 function data{K,V}(chunk::Chunk{K,V}, lrucache::LRU)

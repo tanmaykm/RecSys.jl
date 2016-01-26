@@ -52,6 +52,7 @@ end
 
 
 include("chunk.jl")
+include("mmapsparse.jl")
 include("input.jl")
 include("dist_input.jl")
 include("als_model.jl")

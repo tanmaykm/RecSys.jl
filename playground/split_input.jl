@@ -15,16 +15,17 @@ function split_sparse(S, chunkmax, filepfx)
                 print("\tchunk $chunknum ... ")
                 cfilename = "$(filepfx).$(chunknum)"
                 println(mfile, colstart, ",", col, ",", cfilename)
-                open(cfilename, "w") do cfile
-                    for cidx in colstart:col
-                        rowstart = S.colptr[cidx]
-                        rowend = S.colptr[cidx+1]-1
-                        for ridx in rowstart:rowend
-                            println(cfile, rowval[ridx], ",", cidx, ",", nzval[ridx])
-                        end
-                    end
-                end
-                #    SC = sub(S, :, colstart:(col-1))
+                RecSys.mmapsave(S[:, colstart:col], cfilename)
+                #open(cfilename, "w") do cfile
+                #    for cidx in colstart:col
+                #        rowstart = S.colptr[cidx]
+                #        rowend = S.colptr[cidx+1]-1
+                #        for ridx in rowstart:rowend
+                #            println(cfile, rowval[ridx], ",", cidx, ",", nzval[ridx])
+                #        end
+                #    end
+                #end
+                #    SC = sub(S, :, colstart:col)
                 #    R,C,NZ = findnz(SC)
                 #    print("... ")
                 #    for idx in 1:length(R)
@@ -56,6 +57,12 @@ end
 
 function splitall(R::SparseMatrixCSC, output_path::AbstractString, nsplits::Int)
     nratings = nnz(R)
+    println("$nratings ratings in $(size(R)) sized sparse matrix")
+    println("removing empty...")
+    R, non_empty_items, non_empty_users = RecSys.filter_empty(R)
+    nratings = nnz(R)
+    println("$nratings ratings in $(size(R)) sized sparse matrix")
+
     nsplits_u = round(Int, nratings/nsplits)
     nsplits_i = round(Int, nratings/nsplits)
 
@@ -76,7 +83,7 @@ function split_lastfm(dataset_path = "/data/Work/datasets/last_fm_music_recommen
 
     function read_artist_map(artist_map::FileSpec)
         t1 = time()
-        RecSys.logmsg("reading artist map")
+        RecSys.@logmsg("reading artist map")
         A = read_input(artist_map)
         valid = map(x->isa(x, Integer), A)
         valid = valid[:,1] & valid[:,2]
@@ -88,13 +95,13 @@ function split_lastfm(dataset_path = "/data/Work/datasets/last_fm_music_recommen
             good_id = Avalid[idx, 2]
             amap[bad_id] = good_id
         end
-        RecSys.logmsg("read artist map in $(time()-t1) secs")
+        RecSys.@logmsg("read artist map in $(time()-t1) secs")
         amap
     end
 
     function read_trainingset(trainingset::FileSpec, amap::Dict{Int64,Int64})
         t1 = time()
-        RecSys.logmsg("reading trainingset")
+        RecSys.@logmsg("reading trainingset")
         T = read_input(trainingset)
         for idx in 1:size(T,1)
             artist_id = T[idx,2]
@@ -106,7 +113,7 @@ function split_lastfm(dataset_path = "/data/Work/datasets/last_fm_music_recommen
         artists = convert(Vector{Int64},   T[:,2])
         ratings = convert(Vector{Float64}, T[:,3])
         S = sparse(users, artists, ratings)
-        RecSys.logmsg("read trainingset in $(time()-t1) secs")
+        RecSys.@logmsg("read trainingset in $(time()-t1) secs")
         S
     end
 
