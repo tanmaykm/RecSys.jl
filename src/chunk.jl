@@ -8,10 +8,14 @@
 
 using LRUCache
 using Base.Mmap
+import Base.Mmap: sync!
 
-type MemMappedMatrix{T,N}
+# D = dimension that is split
+# N = value of the other dimension, which is constant across all splits
+type MemMappedMatrix{T,D,N}
     val::Matrix{T}
 end
+sync!(m::MemMappedMatrix) = sync!(m.val)
 
 type Chunk{K,V}
     path::AbstractString
@@ -33,12 +37,13 @@ function Chunk(path::AbstractString, keyrange, V)
     Chunk{K,V}(path, 0, size, keyrange, V, Nullable{WeakRef}())
 end
 
-function load{T,N}(::Type{MemMappedMatrix{T,N}}, chunk::Chunk)
+function load{T,D,N}(::Type{MemMappedMatrix{T,D,N}}, chunk::Chunk)
     @logmsg("loading memory mapped chunk $(chunk.path)")
     ncells = div(chunk.size, sizeof(T))
     M = Int(ncells/N)
-    A = Mmap.mmap(chunk.path, Matrix{T}, (M,N), chunk.offset)
-    MemMappedMatrix{T,N}(A)
+    dims = (D == 1) ? (M,N) : (N,M)
+    A = Mmap.mmap(chunk.path, Matrix{T}, dims, chunk.offset)
+    MemMappedMatrix{T,D,N}(A)
 end
 
 function load{T<:Vector{UInt8}}(::Type{T}, chunk::Chunk)
@@ -72,7 +77,7 @@ function load{T<:SparseMatrixCSC}(::Type{T}, chunk::Chunk)
     @logmsg("loading memory mapped sparse $(chunk.path)")
     open(chunk.path) do f
         seek(f, chunk.offset)
-        return mmapload(f)::T
+        return mmap_csc_load(f)::T
     end
 end
 
@@ -87,8 +92,14 @@ function data{K,V}(chunk::Chunk{K,V}, lrucache::LRU)
     v::V
 end
 
+function sync!(chunk::Chunk)
+    isnull(chunk.data) || sync!(get(chunk.data).value)
+end
+
 function finalize_chunk_data(chunk::Chunk, data)
     #@logmsg("unloading chunk $(chunk.path)")
+    # TODO: need to sync! when it gets chucked out of the lrucache
+    #sync!(chunk)
     chunk.data = nothing
 end
 
@@ -98,6 +109,12 @@ type ChunkedFile{K,V}
     metapath::AbstractString
     chunks::Vector{Chunk{K,V}}
     lrucache::LRU
+end
+
+function sync!(cf::ChunkedFile)
+    for chunk in cf.chunks
+        sync!(chunk)
+    end
 end
 
 function ChunkedFile(metapath::AbstractString, K, V, max_cache)
@@ -116,14 +133,12 @@ function writemeta(cf::ChunkedFile)
         chunks = cf.chunks
         idx = 1
         for chunk in chunks
+            @logmsg("writing chunk: $(chunk.keyrange)")
             println(meta, first(chunk.keyrange), ",", last(chunk.keyrange), ",", chunkpfx, ".", idx)
             idx += 1
         end
     end
 end
-
-ChunkedSparseMatrixCSC(metapath::AbstractString, max_cache::Int=5) = ChunkedFile(metapath, UnitRange{Int64}, SparseMatrixCSC{Float64,Int}, max_cache)
-ChunkedMemMappedMatrix(metapath::AbstractString, ncols::Int, max_cache::Int=5) = ChunkedFile(metapath, UnitRange{Int64}, MemMappedMatrix{Float64,ncols}, max_cache)
 
 function getchunk{K,V}(cf::ChunkedFile{K,V}, key::Int)
     for chunk in cf.chunks
@@ -132,13 +147,18 @@ function getchunk{K,V}(cf::ChunkedFile{K,V}, key::Int)
     error("Key not found")
 end
 
+#=
+ChunkedSparseMatrixCSC(metapath::AbstractString, max_cache::Int=5) = ChunkedFile(metapath, UnitRange{Int64}, SparseMatrixCSC{Float64,Int}, max_cache)
+ChunkedMemMappedMatrix(metapath::AbstractString, D::Int, N::Int, max_cache::Int=5) = ChunkedFile(metapath, UnitRange{Int64}, MemMappedMatrix{Float64,D,N}, max_cache)
+
 function data{K,SK,SV}(cf::ChunkedFile{K,SparseMatrixCSC{SK,SV}}, key::Int)
     chunk = getchunk(cf, key)
     d = data(chunk, cf.lrucache)
     RecSys._sprowsvals(d, key - first(chunk.keyrange) + 1)
 end
 
-function data{K,T,N}(cf::ChunkedFile{K,MemMappedMatrix{T,N}}, key::Int)
+function data{K,T,D,N}(cf::ChunkedFile{K,MemMappedMatrix{T,D,N}}, key::Int)
     M = data(getchunk(cf, key), cf.lrucache)
     M.val
 end
+=#

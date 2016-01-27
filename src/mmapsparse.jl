@@ -1,13 +1,14 @@
 using Base.Mmap
+import Base.Mmap: sync!
 
-function mmapsave(spm::SparseMatrixCSC, fname::AbstractString)
+function mmap_csc_save(spm::SparseMatrixCSC, fname::AbstractString)
     touch(fname)
     open(fname, "r+") do fhandle
-        mmapsave(spm, fhandle)
+        mmap_csc_save(spm, fhandle)
     end
 end
 
-function mmapsave{Tv,Ti}(spm::SparseMatrixCSC{Tv,Ti}, fhandle::IO)
+function mmap_csc_save{Tv,Ti}(spm::SparseMatrixCSC{Tv,Ti}, fhandle::IO)
     header = Int64[spm.m, spm.n, length(spm.nzval), Base.Serializer.sertag(Tv), Base.Serializer.sertag(Ti)]
 
     seek(fhandle, 0)
@@ -18,13 +19,13 @@ function mmapsave{Tv,Ti}(spm::SparseMatrixCSC{Tv,Ti}, fhandle::IO)
     nothing
 end
 
-function mmapload(fname::AbstractString)
+function mmap_csc_load(fname::AbstractString)
     open(fname, "r+") do fhandle
-        mmapload(fhandle)
+        mmap_csc_load(fhandle)
     end
 end
 
-function mmapload(fhandle::IO)
+function mmap_csc_load(fhandle::IO)
     header = Array(Int64, 5)
     pos1 = position(fhandle)
     header = read!(fhandle, header)
@@ -41,6 +42,13 @@ function mmapload(fhandle::IO)
     rowval = Mmap.mmap(fhandle, Vector{Ti}, (nz,), pos1)
 
     pos1 += sizeof(rowval)
-    nzval = Mmap.mmap(fhandle, Vector{Tv}, (nz,), pos1)  
+    nzval = Mmap.mmap(fhandle, Vector{Tv}, (nz,), pos1)
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
-end 
+end
+
+function sync!(spm::SparseMatrixCSC)
+    Mmap.sync!(spm.colptr)
+    Mmap.sync!(spm.rowval)
+    Mmap.sync!(spm.nzval)
+    nothing
+end

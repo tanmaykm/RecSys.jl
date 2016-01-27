@@ -5,7 +5,7 @@ type ALSWR{TP<:Parallelism,TI<:Inputs,TM<:Model}
 end
 
 ALSWR{TP<:Union{ParThread,ParShmem}}(inp::FileSpec, par::TP=ParShmem()) = ALSWR{TP,SharedMemoryInputs,SharedMemoryModel}(SharedMemoryInputs(inp), nothing, par)
-ALSWR(user_item_ratings::FileSpec, item_user_ratings::FileSpec, par::ParChunk) = ALSWR{ParChunk,DistInputs,SharedMemoryModel}(DistInputs(user_item_ratings, item_user_ratings), nothing, par)
+ALSWR(user_item_ratings::FileSpec, item_user_ratings::FileSpec, par::ParChunk) = ALSWR{ParChunk,DistInputs,DistModel}(DistInputs(user_item_ratings, item_user_ratings), nothing, par)
 
 function clear(als::ALSWR)
     clear(als.inp)
@@ -27,6 +27,12 @@ end
 
 function train(als::ALSWR, niters::Int, nfacts::Int64, lambda::Float64=0.065)
     als.model = prep(als.inp, nfacts, lambda)
+    fact_iters(als, niters)
+    nothing
+end
+
+function train(als::ALSWR{ParChunk,DistInputs,DistModel}, niters::Int, nfacts::Int64, model_dir::AbstractString, max_cache::Int=10, lambda::Float64=0.065)
+    als.model = prep(als.inp, nfacts, lambda, model_dir, max_cache)
     fact_iters(als, niters)
     nothing
 end

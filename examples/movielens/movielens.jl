@@ -90,12 +90,14 @@ function test(dataset_path)
 end
 
 # prepare chunks for movielens dataset by running `split_movielens` from `playground/split_input.jl`
-function test_chunks(dataset_path)
+function test_chunks(dataset_path, model_path)
     user_item_ratings = SparseMatChunks(joinpath(dataset_path, "splits", "R_itemwise.meta"), 10)
     item_user_ratings = SparseMatChunks(joinpath(dataset_path, "splits", "RT_userwise.meta"), 10)
     movies_file = DlmFile(joinpath(dataset_path, "movies.csv"); dlm=',', header=true)
     rec = MovieRec(user_item_ratings, item_user_ratings, movies_file)
-    train(rec, 10, 4)
+    train(rec, 10, 4, model_path, 10)
+
+    #=
 
     err = rmse(rec)
     println("rmse of the model: $err")
@@ -118,5 +120,6 @@ function test_chunks(dataset_path)
     clear(rec.als)
     localize!(rec.als)
     save(rec, "model.sav")
+    =#
     nothing
 end

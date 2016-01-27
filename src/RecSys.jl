@@ -9,7 +9,7 @@ end
 
 import Base: zero
 
-export FileSpec, DlmFile, MatFile, SparseMat, SparseMatChunks, read_input
+export FileSpec, DlmFile, MatFile, SparseMat, SparseMatChunks, DenseMatChunks, read_input
 export ALSWR, train, recommend, rmse, zero
 export ParShmem, ParChunk
 export save, load, clear, localize!
@@ -56,6 +56,7 @@ include("mmapsparse.jl")
 include("input.jl")
 include("dist_input.jl")
 include("als_model.jl")
+include("als_dist_model.jl")
 include("als-wr.jl")
 include("utils.jl")
 

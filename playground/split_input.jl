@@ -15,7 +15,7 @@ function split_sparse(S, chunkmax, filepfx)
                 print("\tchunk $chunknum ... ")
                 cfilename = "$(filepfx).$(chunknum)"
                 println(mfile, colstart, ",", col, ",", cfilename)
-                RecSys.mmapsave(S[:, colstart:col], cfilename)
+                RecSys.mmap_csc_save(S[:, colstart:col], cfilename)
                 #open(cfilename, "w") do cfile
                 #    for cidx in colstart:col
                 #        rowstart = S.colptr[cidx]
@@ -123,7 +123,7 @@ function split_lastfm(dataset_path = "/data/Work/datasets/last_fm_music_recommen
 end
 
 function load_splits(dataset_path = "/data/Work/datasets/last_fm_music_recommendation/profiledata_06-May-2005/splits")
-    cf = ChunkedSparseMatrixCSC(joinpath(dataset_path, "R_itemwise.meta"))
+    cf = RecSys.ChunkedFile(joinpath(dataset_path, "R_itemwise.meta"), UnitRange{Int64}, SparseMatrixCSC{Float64,Int}, 10)
     println(cf)
     nchunks = length(cf.chunks)
     for idx in 1:10
@@ -132,45 +132,28 @@ function load_splits(dataset_path = "/data/Work/datasets/last_fm_music_recommend
         c = cf.chunks[cid]
         key = floor(Int, length(c.keyrange)*rand()) + c.keyrange.start
         println("fetching key $key")
-        r,v = data(cf, key)
+        r,v = RecSys.data(cf, key)
         #println("\tr:$r, v:$v")
     end
     println("finished")
 end
 
-function create_memmapped_splits(dataset_path = "/data/Work/datasets/last_fm_music_recommendation/profiledata_06-May-2005/splitsmem")
+function test_dense_splits(dataset_path = "/tmp/test")
     metafilename = joinpath(dataset_path, "mem.meta")
-    N = 3
-    M = 100
-    sz = M*N*sizeof(Float64)
-    NC = 10
-
-    touch(metafilename)
-    cf = ChunkedMemMappedMatrix(metafilename, N)
-
-    for idx in 1:NC
-        chunkfname = joinpath(dataset_path, "mem.$idx")
-        r1 = (idx-1)*M+1
-        r2 = idx*M
-        chunk = Chunk(chunkfname, 0, sz, r1:r2, MemMappedMatrix{Float64,N})
-        push!(cf.chunks, chunk)
+    cfile = DenseMatChunks(metafilename, 1, (10^6,10))
+    RecSys.create(cfile)
+    cf = RecSys.read_input(cfile)
+    for idx in 1:10
+        chunk = RecSys.getchunk(cf, idx*10^4)
+        A = RecSys.data(chunk, cf.lrucache)
+        @assert A.val[1] == 0.0
+        fill!(A.val, idx)
     end
-    for idx in 1:NC
-        A = data(cf, idx*M)
-        fill!(A, idx)
-    end
-    for idx in 1:NC
-        A = data(cf, idx*M)
-        println(A[1])
-    end
-
-    writemeta(cf)
-    cf = ChunkedMemMappedMatrix(metafilename, N)
-    for idx in 1:NC
-        A = data(cf, idx*M)
-        println(A[1])
+    cf = RecSys.read_input(cfile)
+    for idx in 1:10
+        chunk = RecSys.getchunk(cf, idx*10^4)
+        A = RecSys.data(chunk, cf.lrucache)
+        @assert A.val[1] == Float64(idx)
+        println(A.val[1])
     end
 end
-
-#load_splits()
-#create_memmapped_splits()

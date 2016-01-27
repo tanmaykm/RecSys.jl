@@ -30,6 +30,7 @@ function localize!(model::SharedMemoryModel)
     isa(model.P, SharedArray) && (model.P = copy(model.P))
     nothing
 end
+sync!(model::SharedMemoryModel) = nothing
 
 function clear(model::SharedMemoryModel)
     model.lambdaI = nothing
