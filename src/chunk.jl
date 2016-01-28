@@ -111,6 +111,8 @@ type ChunkedFile{K,V}
     lrucache::LRU
 end
 
+keyrange(cf::ChunkedFile) = first(cf.chunks[1].keyrange):last(cf.chunks[end].keyrange)
+
 function sync!(cf::ChunkedFile)
     for chunk in cf.chunks
         sync!(chunk)

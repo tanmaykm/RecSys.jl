@@ -94,6 +94,8 @@ function create(fspec::DenseMatChunks, initfn::Function=zero!, max_items::Int=_m
     V = fspec.sz[D]
     NC = ceil(Int, V/max_items)
     chunkpfx = splitext(fspec.metafile)[1]
+    empty!(cf.chunks)
+    empty!(cf.lrucache)
 
     for idx in 1:NC
         chunkfname = "$(chunkpfx).$(idx)"

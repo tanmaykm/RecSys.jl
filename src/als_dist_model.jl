@@ -18,8 +18,8 @@ type DistModel <: Model
     Pinv::Nullable{ModelFactor}
 end
 
-nusers(model::DistModel) = size(model.U, 1)
-nitems(model::DistModel) = size(model.P, 2)
+nusers(model::DistModel) = last(keyrange(get(model.U)))
+nitems(model::DistModel) = last(keyrange(get(model.P)))
 nfactors(model::DistModel) = model.nfactors
 
 share!(model::DistModel) = nothing
@@ -42,6 +42,15 @@ end
 #vec_mul_p(model::DistModel, v) = v * model.P
 #vec_mul_pinv(model::DistModel, v) = v * pinv(model)
 
+function vec_mul_p(model::DistModel, v)
+    res = Array(Float64, nitems(model))
+    cfP = get(model.P)
+    for chunk in cfP.chunks
+        P = data(chunk, cfP.lrucache).val
+        res[chunk.keyrange] = v * P
+    end
+    res
+end
 
 function prep{TI<:DistInputs}(inp::TI, nfacts::Int, lambda::Float64, model_dir::AbstractString, max_cache::Int=10)
     ensure_loaded(inp)

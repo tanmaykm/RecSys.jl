@@ -97,10 +97,10 @@ function test_chunks(dataset_path, model_path)
     rec = MovieRec(user_item_ratings, item_user_ratings, movies_file)
     train(rec, 10, 4, model_path, 10)
 
-    #=
-
     err = rmse(rec)
     println("rmse of the model: $err")
+
+    #=
 
     println("recommending existing user:")
     print_recommendations(rec, recommend(rec, 100)...)
