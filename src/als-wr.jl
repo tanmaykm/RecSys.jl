@@ -101,7 +101,7 @@ end
 ##
 # Recommendation
 function _recommend(Uvec, model, rated, i_idmap; count::Int=10)
-    top = sortperm(vec(vec_mul_p(model, Uvec)))
+    top = sortperm(vec(mul_p(model, Uvec)))
 
     recommended = Int64[]
     idx = 1
@@ -152,7 +152,7 @@ function recommend(als::ALSWR, user_ratings::SparseVector{Float64,Int64}; unrate
     model = get(als.model)
     mapped_ratings = isempty(i_idmap) ? full(user_ratings) : user_ratings[i_idmap]
     Rvec = reshape(mapped_ratings, 1, length(mapped_ratings))
-    Uvec = vec_mul_pinv(model, Rvec)
+    Uvec = mul_pinv(model, Rvec)
 
     _recommend(Uvec, model, find(Rvec), i_idmap; count=count)
 end
@@ -212,7 +212,62 @@ function fact_iters{TP<:ParShmem,TM<:Model,TI<:Inputs}(::TP, model::TM, inp::TI,
     nothing
 end
 
-function rmse{TP<:Union{ParShmem,ParBlob},TI<:Inputs}(als::ALSWR{TP}, inp::TI)
+function rmse(r::UnitRange)
+    c = fetch_compdata()
+    inp = c.inp
+    model = c.model
+    rmse(inp, model, r)
+end
+
+function rmse(inp::Inputs, model::Model, r::UnitRange)
+    U = get(model.U)
+    Upart = U[:, r]
+    predicted = mul_p(model, Upart')
+
+    cumerr = 0
+    nvals = 0
+    uoffset = first(r)-1
+
+#=
+    for user in r
+        nzrows, nzvals = items_and_ratings(inp, user)
+        nvals += length(nzrows)
+        cumerr += sum((predicted[user-uoffset,nzrows] .- nzvals) .^ 2)
+        #for idx in 1:length(nzrows)
+        #    cumerr += (predicted[user-uoffset, nzrows[idx]] - nzvals[idx]) ^ 2
+        #end
+    end
+=#
+    cumerr, nvals
+end
+
+function rmse{TI<:Inputs}(als::ALSWR{ParBlob}, inp::TI)
+    t1 = time()
+
+    model = get(als.model)
+    share!(model)
+    share!(inp)
+    ensure_loaded(inp)
+    ensure_loaded(model)
+
+    U = get(model.U)
+    # heuristics to get a reasonable split size (applicable only to single node system)
+    split_size = floor(Int, Base.Sys.free_memory() / 2 / nworkers() / nitems(model) / sizeof(Float64))
+    split_size = min(5000, split_size)
+    @logmsg("chosen split size: $split_size")
+
+    usplits = [1:split_size:size(U,2)...]
+    usplits[end] = size(U,2)
+    uranges = UnitRange{Int}[usplits[x]:usplits[x+1] for x in 1:(length(usplits)-1)]
+    results = pmap((r)->rmse(inp, model, r), uranges)
+    cumerr = sum([res[1] for res in results])
+    nvals = sum([res[2] for res in results])
+    localize!(model)
+    @logmsg("rmse time $(time()-t1)")
+    sqrt(cumerr/nvals)
+end
+#=
+function rmse{TI<:Inputs}(als::ALSWR{ParBlob}, inp::TI)
     t1 = time()
 
     model = get(als.model)
@@ -224,7 +279,28 @@ function rmse{TP<:Union{ParShmem,ParBlob},TI<:Inputs}(als::ALSWR{TP}, inp::TI)
     cumerr = @parallel (.+) for user in 1:nusers(inp)
         Uvec = reshape(getU(model,user), 1, nfactors(model))
         nzrows, nzvals = items_and_ratings(inp, user)
-        predicted = vec(vec_mul_p(model, Uvec))[nzrows]
+        predicted = vec(mul_p(model, Uvec))[nzrows]
+        [sum((predicted .- nzvals) .^ 2), length(predicted)]
+    end
+    localize!(model)
+    @logmsg("rmse time $(time()-t1)")
+    sqrt(cumerr[1]/cumerr[2])
+end
+=#
+
+function rmse{TI<:Inputs}(als::ALSWR{ParShmem}, inp::TI)
+    t1 = time()
+
+    model = get(als.model)
+    share!(model)
+    share!(inp)
+    ensure_loaded(inp)
+    ensure_loaded(model)
+
+    cumerr = @parallel (.+) for user in 1:nusers(inp)
+        Uvec = reshape(getU(model,user), 1, nfactors(model))
+        nzrows, nzvals = items_and_ratings(inp, user)
+        predicted = vec(mul_p(model, Uvec))[nzrows]
         [sum((predicted .- nzvals) .^ 2), length(predicted)]
     end
     localize!(model)
@@ -352,7 +428,7 @@ function rmse{TP<:ParThread,TI<:Inputs}(als::ALSWR{TP}, inp::TI)
         @threads for user in pos:endpos
             Uvec = reshape(getU(model, user), 1, NF)
             nzrows, nzvals = items_and_ratings(inp, user)
-            predicted = vec(vec_mul_p(model, Uvec))[nzrows]
+            predicted = vec(mul_p(model, Uvec))[nzrows]
 
             tid = threadid()
             lengths[tid] += length(predicted)
